@@ -141,12 +141,10 @@ def main():
     DECIMAL_POINTS = 2  # e.g., 2 decimal places
     # Set the minimum percentage threshold below which no label is shown.
     MIN_LABEL_PERCENT = 1.0  # e.g., do not show labels if below 1%
+	
+    with open('code.txt', 'r') as file:
+        code = file.read()
 
-    code = """
-
-result = 6d6
-    
-"""
     # Preprocess and transform the code
     processed_code = preprocess_code(code)
     tree = ast.parse(processed_code)
@@ -184,4 +182,3 @@ result = 6d6
 
 if __name__ == "__main__":
     main()
-
