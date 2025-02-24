@@ -43,14 +43,14 @@ https://illectrility.github.io/probify-web/
   ```python
   result = 0
   for i in range(4):
-      result += 1d6
+      result = result + 1d6
   ```
 
 - Simple example:
   ```python
   result = 0
   for i in range(6): # Repeat 6 times
-      result += 1d6 # Add 1d6 to result
+      result = result + 1d6 # Add 1d6 to result
   ```
 
 - Simple example 2:
@@ -65,7 +65,7 @@ https://illectrility.github.io/probify-web/
       x = 1d8 # x is a d8 roll
       if x < 3: # If x is 1 or 2
           x = 1d8 # Re-roll x as a d8
-      result += x # Add x to the result
+      result = result + x # Add x to the result
   ```
 
 - Complex example:  
@@ -75,18 +75,20 @@ https://illectrility.github.io/probify-web/
       x = 1d6 # x is a d6 roll
       if x < 3: # If x is 1 or 2
           x = 1d6 # Re-roll x as a d6
-      result += x # Add x to the result
+      result = result + x # Add x to the result
       # All of this is repeated 6 times
 
   y = 1d8 # y is a d8 roll
   if y < 3: # If y is 1 or 2
       y = 1d8 # Re-roll y as a d8
-  result += y # Add y to the result
+  result = result + y # Add y to the result
   # This isn't repeated
 
-  result += 1d4 # Add a d4 to the result
-  result += 15 # Add 15 to the result
+  result = result + 1d4 # Add a d4 to the result
+  result = result + 15 # Add 15 to the result
   ```
+
+- Hint: Often `result = result +` can be shortened to `result +=`. Sometimes it throws an error; if it does just write it out. I have no idea how to fix that.
 
 # configuration  
 - `DECIMAL_POINTS = 2` → How many decimal places to show for probabilities  
