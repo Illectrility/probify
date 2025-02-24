@@ -7,6 +7,10 @@ I like knowing the exact probability of different dice sequences for balancing p
 # why not just simulate the dice rolls?  
 You could simulate a million rolls and estimate probabilities, but this is **slow and inaccurate**. This program **computes the exact probabilities** using math, not brute force. No randomness involved.
 
+# web version
+If you don't want to run the code yourself, you can use this very barebones web version I made:
+https://illectrility.github.io/probify-web/
+
 # installation
 - Install Python (https://www.python.org/downloads/)
 - Install matplotlib (https://matplotlib.org/stable/install/index.html)
