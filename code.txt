@@ -1,0 +1,13 @@
+result = 0
+
+result += 3d6
+
+x = 1d8
+if x < 2:
+    x = 1d8
+
+result += x
+
+result += 1d4
+
+result += 10  
