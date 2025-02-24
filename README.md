@@ -2,7 +2,7 @@
 Complex dice sequence probability calculator written in Python.
 
 # about  
-I like knowing the exact probability of different dice sequences for balancing purposes. This program lets you write dice roll sequences in Python-style syntax, automatically calculates the exact probabilities mathematically, and displays the results as a bar chart.  
+I like knowing the exact probability of different dice sequences for balancing purposes. This program lets you write dice roll sequences in Python-style syntax, automatically calculates the exact probabilities mathematically, and displays the results as a bar chart. This is perfect for games like Dungeons & Dragons (D&D).
 
 # why not just simulate the dice rolls?  
 You could simulate a million rolls and estimate probabilities, but this is **slow and inaccurate**. This program **computes the exact probabilities** using math, not brute force. No randomness involved.
