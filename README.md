@@ -5,7 +5,15 @@ Complex dice sequence probability calculator written in Python.
 I like knowing the exact probability of different dice sequences for balancing purposes. This program lets you write dice roll sequences in Python-style syntax, automatically calculates the exact probabilities mathematically, and displays the results as a bar chart.  
 
 # why not just simulate the dice rolls?  
-You could simulate a million rolls and estimate probabilities, but this is **slow and inaccurate**. This program **computes the exact probabilities** using math, not brute force. No randomness involved.  
+You could simulate a million rolls and estimate probabilities, but this is **slow and inaccurate**. This program **computes the exact probabilities** using math, not brute force. No randomness involved.
+
+# installation
+- Install Python (https://www.python.org/downloads/)
+- Install matplotlib (https://matplotlib.org/stable/install/index.html)
+
+# how to use
+- Write your dice code in code.txt
+- Run program using `python3 probify.py` on Linux or `python probify.py` if you're on Windows
 
 # features  
 - Write dice sequences in **Python-style syntax**  
@@ -77,4 +85,4 @@ You could simulate a million rolls and estimate probabilities, but this is **slo
 
 # configuration  
 - `DECIMAL_POINTS = 2` → How many decimal places to show for probabilities  
-- `MIN_LABEL_PERCENT = 1.0` → Hide probability labels below this percentage  
+- `MIN_LABEL_PERCENT = 1.0` → Hide probability labels below this percentage
