@@ -51,7 +51,28 @@ class GF:
             return NotImplemented
 
     def __radd__(self, other):
-        return self + other
+        if isinstance(other, int):
+            return GF({k + other: v for k, v in self.dist.items()})
+        return NotImplemented
+
+    def __sub__(self, other):
+        if isinstance(other, int):
+            # Subtracting an integer: shift each outcome by -other
+            return GF({k - other: v for k, v in self.dist.items()})
+        elif isinstance(other, GF):
+            # Subtracting two GF objects: compute distribution of (X - Y)
+            # This is done by reflecting other and convolving.
+            reflected = { -k: v for k, v in other.dist.items() }
+            return GF(gf_add(self.dist, reflected))
+        else:
+            return NotImplemented
+
+    def __rsub__(self, other):
+        # For expressions like: int - GF
+        if isinstance(other, int):
+            return GF({other - k: v for k, v in self.dist.items()})
+        else:
+            return NotImplemented
 
     def __mul__(self, other):
         if isinstance(other, int):
@@ -59,7 +80,9 @@ class GF:
         return NotImplemented
 
     def __rmul__(self, other):
-        return self * other
+        if isinstance(other, int):
+            return GF(gf_repeat(self.dist, other))
+        return NotImplemented
 
     def __str__(self):
         return str(self.dist)
