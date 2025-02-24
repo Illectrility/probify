@@ -18,7 +18,8 @@ You could simulate a million rolls and estimate probabilities, but this is **slo
 
 # syntax
 - Dice rolls use `XdY` notation (e.g., `1d6`, `2d8`)  
-- Use variables: `x = 1d6`  
+- Use variables: `x = 1d6`
+- Resulting variable is always called `result`
 - Conditional rerolling:  
   ```python
   x = 1d6
@@ -27,26 +28,51 @@ You could simulate a million rolls and estimate probabilities, but this is **slo
   ```  
 - Loops:  
   ```python
-  total = 0
+  result = 0
   for i in range(4):
-      total += 1d6
-  ```  
+      result += 1d6
+  ```
+
+- Simple example:
+  ```python
+  result = 0
+  for i in range(6): # Repeat 6 times
+      result += 1d6 # Add 1d6 to result
+  ```
+
+- Simple example 2:
+  ```python
+  result = 6d6 # Add 6d6 to result
+  ```
+
+- More complex example:
+  ```python
+  result = 0
+  for i in range(4): # Repeat 4 times
+      x = 1d8 # x is a d8 roll
+      if x < 3: # If x is 1 or 2
+          x = 1d8 # Re-roll x as a d8
+      result += x # Add x to the result
+  ```
+
 - Complex example:  
   ```python
-  val = 0
-  for i in range(6):
-      x = 1d6
-      if x < 3:
-          x = 1d6
-      val += x
+  result = 0
+  for i in range(6): # Repeat 6 times
+      x = 1d6 # x is a d6 roll
+      if x < 3: # If x is 1 or 2
+          x = 1d6 # Re-roll x as a d6
+      result += x # Add x to the result
+      # All of this is repeated 6 times
 
-  y = 1d8
-  if y < 3:
-      y = 1d8
-  val += y
+  y = 1d8 # y is a d8 roll
+  if y < 3: # If y is 1 or 2
+      y = 1d8 # Re-roll y as a d8
+  result += y # Add y to the result
+  # This isn't repeated
 
-  val += 1d4
-  val += 15
+  result += 1d4 # Add a d4 to the result
+  result += 15 # Add 15 to the result
   ```
 
 # configuration  
