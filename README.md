@@ -10,6 +10,7 @@ You could simulate a million rolls and estimate probabilities, but this is **slo
 # installation
 - Install Python (https://www.python.org/downloads/)
 - Install matplotlib (https://matplotlib.org/stable/install/index.html)
+- Download and unzip code
 
 # how to use
 - Write your dice code in code.txt
