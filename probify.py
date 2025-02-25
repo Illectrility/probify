@@ -31,11 +31,36 @@ def gf_dice(notation):
     return GF(gf_repeat(one_die, N))
 
 def gf_conditional(gf_obj, condition, replacement):
-    """Apply conditional rerolling."""
+    """Replace outcomes in gf_obj that satisfy condition with replacement.
+    
+    If replacement is not already a GF, it is wrapped as a constant distribution.
+    """
     prob_replace = sum(prob for outcome, prob in gf_obj.dist.items() if condition(outcome))
     new_dist = {outcome: prob for outcome, prob in gf_obj.dist.items() if not condition(outcome)}
+    if not isinstance(replacement, GF):
+        replacement = GF({replacement: 1})
     for outcome, prob in replacement.dist.items():
         new_dist[outcome] = new_dist.get(outcome, 0) + prob_replace * prob
+    return GF(new_dist)
+
+def gf_if_else(gf_obj, condition, then_replacement, else_replacement):
+    """Map outcomes of gf_obj to then_replacement if condition(outcome) is True,
+    or else_replacement otherwise.
+    
+    The replacements can be constants or GF objects.
+    """
+    # Wrap replacements if needed.
+    if not isinstance(then_replacement, GF):
+        then_replacement = GF({then_replacement: 1})
+    if not isinstance(else_replacement, GF):
+        else_replacement = GF({else_replacement: 1})
+    p_true = sum(prob for outcome, prob in gf_obj.dist.items() if condition(outcome))
+    p_false = 1 - p_true
+    new_dist = {}
+    for val, prob in then_replacement.dist.items():
+        new_dist[val] = new_dist.get(val, 0) + p_true * prob
+    for val, prob in else_replacement.dist.items():
+        new_dist[val] = new_dist.get(val, 0) + p_false * prob
     return GF(new_dist)
 
 class GF:
@@ -60,7 +85,6 @@ class GF:
         if isinstance(other, int):
             return GF({k - other: v for k, v in self.dist.items()})
         elif isinstance(other, GF):
-            # Compute distribution of (X - Y) by reflecting Y and convolving.
             reflected = { -k: v for k, v in other.dist.items() }
             return GF(gf_add(self.dist, reflected))
         else:
@@ -83,40 +107,61 @@ class GF:
 
     def __str__(self):
         return str(self.dist)
-
     __repr__ = __str__
 
-# ----- AST Transformation -----
+# ----- Extended AST Transformer -----
 
 class DiceTransformer(ast.NodeTransformer):
     """
-    Transforms dice syntax into probability computations.
-    For conditionals:
+    Transforms dice syntax into mathematical probability computations.
+    
+    Supports:
+    
+    Pattern A (if with same variable):
+        x = 1d6
         if x < 3:
             x = 1d6
-    becomes:
-        x = gf_conditional(x, lambda outcome: outcome < 3, gf_dice("1d6"))
-    And for simple loops summing dice:
-        for i in range(6):
-            result += 1d6
-    becomes:
-        result += gf_dice("1d6") * 6
+        result = x
+        
+    Pattern B (if with different target for conditional assignment):
+        x = 1d6
+        if x < 3:
+            result = 7
+        result = x
+        
+    Pattern C (if/else with same variable):
+        x = 1d6
+        if x == 3:
+            x = 10
+        else:
+            x = 20
+        result = x
+        
+    The transformer converts these into calls to gf_conditional (for if-only)
+    or gf_if_else (for if/else).
     """
+    def __init__(self):
+        self.conditional_assignments = {}  # For Pattern B
+        super().__init__()
+
     def visit_If(self, node):
-        if (isinstance(node.test, ast.Compare) and
+        # If/else branch (Pattern C)
+        if (node.orelse and len(node.body) == 1 and len(node.orelse) == 1 and
+            isinstance(node.test, ast.Compare) and
             isinstance(node.test.left, ast.Name) and
             len(node.test.ops) == 1 and
-            isinstance(node.test.ops[0], (ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.Eq, ast.NotEq)) and
-            len(node.test.comparators) == 1 and
-            isinstance(node.test.comparators[0], ast.Constant)):
+            isinstance(node.test.ops[0], (ast.Eq, ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.NotEq)) and
+            isinstance(node.test.comparators[0], ast.Constant) and
+            isinstance(node.body[0], ast.Assign) and len(node.body[0].targets) == 1 and
+            isinstance(node.orelse[0], ast.Assign) and len(node.orelse[0].targets) == 1):
             
-            var_name = node.test.left.id
-            if (len(node.body) == 1 and isinstance(node.body[0], ast.Assign) and
-                len(node.body[0].targets) == 1 and isinstance(node.body[0].targets[0], ast.Name) and
-                node.body[0].targets[0].id == var_name):
-                
-                assign_node = node.body[0]
-                new_compare = ast.Lambda(
+            var = node.test.left.id
+            # For if/else, we require that both branches assign to the same variable.
+            then_target = node.body[0].targets[0].id
+            else_target = node.orelse[0].targets[0].id
+            if then_target == else_target == var:
+                # Transform into: var = gf_if_else(var, lambda outcome: <condition>, then_expr, else_expr)
+                new_lambda = ast.Lambda(
                     args=ast.arguments(
                         args=[ast.arg(arg="outcome")],
                         posonlyargs=[], defaults=[]),
@@ -126,41 +171,94 @@ class DiceTransformer(ast.NodeTransformer):
                         comparators=node.test.comparators
                     )
                 )
+                then_expr = node.body[0].value
+                else_expr = node.orelse[0].value
                 new_call = ast.Call(
-                    func=ast.Name(id="gf_conditional", ctx=ast.Load()),
-                    args=[ast.Name(id=var_name, ctx=ast.Load()), new_compare, assign_node.value],
+                    func=ast.Name(id="gf_if_else", ctx=ast.Load()),
+                    args=[
+                        ast.Name(id=var, ctx=ast.Load()),
+                        new_lambda,
+                        then_expr,
+                        else_expr
+                    ],
                     keywords=[]
                 )
-                return ast.Assign(targets=[ast.Name(id=var_name, ctx=ast.Store())], value=new_call)
-        return self.generic_visit(node)
-
-    def visit_For(self, node):
-        # Handles simple loops like: for i in range(6): result += 1d6
-        if (isinstance(node.target, ast.Name) and
-            isinstance(node.iter, ast.Call) and
-            isinstance(node.iter.func, ast.Name) and
-            node.iter.func.id == "range" and
-            len(node.iter.args) == 1 and
-            isinstance(node.iter.args[0], ast.Constant)):
-            
-            loop_count = node.iter.args[0].value
-
-            if (len(node.body) == 1 and isinstance(node.body[0], ast.AugAssign) and
-                isinstance(node.body[0].op, ast.Add) and
-                isinstance(node.body[0].target, ast.Name) and
-                isinstance(node.body[0].value, ast.Call)):
-                
-                augassign = node.body[0]
-                # Replace loop with multiplication: dice roll * loop_count
-                new_call = ast.BinOp(left=augassign.value, op=ast.Mult(), right=ast.Constant(value=loop_count))
                 return ast.Assign(
-                    targets=[ast.Name(id=augassign.target.id, ctx=ast.Store())],
-                    value=ast.BinOp(
-                        left=ast.Name(id=augassign.target.id, ctx=ast.Load()),
-                        op=ast.Add(),
-                        right=new_call
+                    targets=[ast.Name(id=var, ctx=ast.Store())],
+                    value=new_call
+                )
+        # If only branch (Pattern A or B)
+        if (isinstance(node.test, ast.Compare) and
+            isinstance(node.test.left, ast.Name) and
+            len(node.test.ops) == 1 and
+            isinstance(node.test.ops[0], (ast.Lt, ast.LtE, ast.Gt, ast.GtE, ast.Eq, ast.NotEq)) and
+            len(node.test.comparators) == 1 and
+            isinstance(node.test.comparators[0], ast.Constant) and
+            len(node.body) == 1 and
+            isinstance(node.body[0], ast.Assign) and
+            len(node.body[0].targets) == 1 and
+            isinstance(node.body[0].targets[0], ast.Name)):
+            
+            source_var = node.test.left.id
+            compare_op = node.test.ops[0]
+            compare_val = node.test.comparators[0]
+            target = node.body[0].targets[0].id
+            alt_expr = node.body[0].value
+            # Pattern A: target == source_var → transform immediately.
+            if target == source_var:
+                new_lambda = ast.Lambda(
+                    args=ast.arguments(
+                        args=[ast.arg(arg="outcome")],
+                        posonlyargs=[], defaults=[]),
+                    body=ast.Compare(
+                        left=ast.Name(id="outcome", ctx=ast.Load()),
+                        ops=[compare_op],
+                        comparators=[compare_val]
                     )
                 )
+                new_call = ast.Call(
+                    func=ast.Name(id="gf_conditional", ctx=ast.Load()),
+                    args=[ast.Name(id=source_var, ctx=ast.Load()), new_lambda, alt_expr],
+                    keywords=[]
+                )
+                return ast.Assign(
+                    targets=[ast.Name(id=source_var, ctx=ast.Store())],
+                    value=new_call
+                )
+            else:
+                # Pattern B: store the conditional for later merging.
+                self.conditional_assignments[target] = (source_var, compare_op, compare_val, alt_expr)
+                return ast.Pass()
+        return self.generic_visit(node)
+
+    def visit_Assign(self, node):
+        # Merge stored conditionals for Pattern B.
+        if (len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) and
+            isinstance(node.value, ast.Name)):
+            target = node.targets[0].id
+            source = node.value.id
+            if target in self.conditional_assignments:
+                stored_source, op, const_node, alt_expr = self.conditional_assignments[target]
+                if source == stored_source:
+                    new_lambda = ast.Lambda(
+                        args=ast.arguments(
+                            args=[ast.arg(arg="outcome")],
+                            posonlyargs=[], defaults=[]),
+                        body=ast.Compare(
+                            left=ast.Name(id="outcome", ctx=ast.Load()),
+                            ops=[op],
+                            comparators=[const_node]
+                        )
+                    )
+                    new_call = ast.Call(
+                        func=ast.Name(id="gf_conditional", ctx=ast.Load()),
+                        args=[ast.Name(id=source, ctx=ast.Load()), new_lambda, alt_expr],
+                        keywords=[]
+                    )
+                    return ast.copy_location(
+                        ast.Assign(targets=[ast.Name(id=target, ctx=ast.Store())], value=new_call),
+                        node
+                    )
         return self.generic_visit(node)
 
 def preprocess_code(code):
@@ -187,15 +285,15 @@ def main():
     # Preprocess and transform the code
     processed_code = preprocess_code(code)
     tree = ast.parse(processed_code)
-    tree = DiceTransformer().visit(tree)
+    transformer = DiceTransformer()
+    tree = transformer.visit(tree)
     ast.fix_missing_locations(tree)
 
     # Execute the transformed code in our custom environment
-    env = {"gf_dice": gf_dice, "gf_conditional": gf_conditional, "GF": GF}
+    env = {"gf_dice": gf_dice, "gf_conditional": gf_conditional, "gf_if_else": gf_if_else, "GF": GF}
     exec(compile(tree, "<ast>", "exec"), env)
 
     # Retrieve the resulting distribution from variable 'result'
-    # (Assuming that your dice code assigns the final distribution to a variable named 'result')
     if "result" not in env:
         print("Error: No variable named 'result' found in the code.")
         return
@@ -273,7 +371,6 @@ def main():
     for stat, value in summary_data:
         print(f"{stat}: {value}")
     
-    # Show the plot (without adding a table)
     plt.show()
 
 if __name__ == "__main__":
