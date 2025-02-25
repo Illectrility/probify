@@ -93,3 +93,5 @@ https://illectrility.github.io/probify-web/
 # configuration  
 - `DECIMAL_POINTS = 2` → How many decimal places to show for probabilities  
 - `MIN_LABEL_PERCENT = 1.0` → Hide probability labels below this percentage
+- `SHOW_CONFIDENCE_INTERVALS = True` → Show confidence intervals in chart and summary  
+- `CONFIDENCE_LEVEL = 0.90` → Set confidence percentage for confidence intervals
