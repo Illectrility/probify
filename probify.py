@@ -1,5 +1,6 @@
 import ast
 import re
+import math
 import matplotlib.pyplot as plt
 
 # ----- Mathematical Probability Operations -----
@@ -57,22 +58,18 @@ class GF:
 
     def __sub__(self, other):
         if isinstance(other, int):
-            # Subtracting an integer: shift each outcome by -other
             return GF({k - other: v for k, v in self.dist.items()})
         elif isinstance(other, GF):
-            # Subtracting two GF objects: compute distribution of (X - Y)
-            # This is done by reflecting other and convolving.
+            # Compute distribution of (X - Y) by reflecting Y and convolving.
             reflected = { -k: v for k, v in other.dist.items() }
             return GF(gf_add(self.dist, reflected))
         else:
             return NotImplemented
 
     def __rsub__(self, other):
-        # For expressions like: int - GF
         if isinstance(other, int):
             return GF({other - k: v for k, v in self.dist.items()})
-        else:
-            return NotImplemented
+        return NotImplemented
 
     def __mul__(self, other):
         if isinstance(other, int):
@@ -92,6 +89,19 @@ class GF:
 # ----- AST Transformation -----
 
 class DiceTransformer(ast.NodeTransformer):
+    """
+    Transforms dice syntax into probability computations.
+    For conditionals:
+        if x < 3:
+            x = 1d6
+    becomes:
+        x = gf_conditional(x, lambda outcome: outcome < 3, gf_dice("1d6"))
+    And for simple loops summing dice:
+        for i in range(6):
+            result += 1d6
+    becomes:
+        result += gf_dice("1d6") * 6
+    """
     def visit_If(self, node):
         if (isinstance(node.test, ast.Compare) and
             isinstance(node.test.left, ast.Name) and
@@ -160,13 +170,19 @@ def preprocess_code(code):
 # ----- Main Execution -----
 
 def main():
-    # Set the number of decimal points for probability labels.
-    DECIMAL_POINTS = 2  # e.g., 2 decimal places
-    # Set the minimum percentage threshold below which no label is shown.
-    MIN_LABEL_PERCENT = 1.0  # e.g., do not show labels if below 1%
-	
-    with open('code.txt', 'r') as file:
-        code = file.read()
+    # Configuration variables
+    DECIMAL_POINTS = 2        # Number of decimal places for probability labels
+    MIN_LABEL_PERCENT = 1.0   # Do not display labels for probabilities below this percent
+    SHOW_CONFIDENCE_INTERVALS = True  # Toggle to show confidence interval bounds on the plot
+    CONFIDENCE_LEVEL = 0.90     # Confidence interval level (e.g., 0.90 for 90% or 0.95 for 95%)
+
+    # Read dice code from external file "code.txt"
+    try:
+        with open("code.txt", "r") as f:
+            code = f.read()
+    except FileNotFoundError:
+        print("Error: 'code.txt' not found.")
+        return
 
     # Preprocess and transform the code
     processed_code = preprocess_code(code)
@@ -174,33 +190,90 @@ def main():
     tree = DiceTransformer().visit(tree)
     ast.fix_missing_locations(tree)
 
-    # Execution environment
+    # Execute the transformed code in our custom environment
     env = {"gf_dice": gf_dice, "gf_conditional": gf_conditional, "GF": GF}
     exec(compile(tree, "<ast>", "exec"), env)
 
-    # Retrieve the result distribution from variable 'result'
+    # Retrieve the resulting distribution from variable 'result'
+    # (Assuming that your dice code assigns the final distribution to a variable named 'result')
+    if "result" not in env:
+        print("Error: No variable named 'result' found in the code.")
+        return
     result = env["result"]
     outcomes, probabilities = zip(*sorted(result.dist.items()))
     
-    # Plot the probability distribution with labels on each bar
-    bars = plt.bar(outcomes, [p * 100 for p in probabilities],
-                   color="skyblue", edgecolor="black")
+    # Create the bar plot for the probability distribution
+    fig, ax = plt.subplots()
+    bars = ax.bar(outcomes, [p * 100 for p in probabilities],
+                  color="skyblue", edgecolor="black")
     for bar, p in zip(bars, probabilities):
         percent_value = p * 100
-        # Only add a label if the probability meets or exceeds MIN_LABEL_PERCENT
         if percent_value >= MIN_LABEL_PERCENT:
             height = bar.get_height()
-            plt.text(
+            ax.text(
                 bar.get_x() + bar.get_width() / 2., 
                 height,
-                f'{percent_value:.{DECIMAL_POINTS}f}%',  # Uses DECIMAL_POINTS for formatting
+                f'{percent_value:.{DECIMAL_POINTS}f}%',
                 ha='center', 
                 va='bottom'
             )
-    plt.xlabel("Outcome")
-    plt.ylabel("Probability (%)")
-    plt.title("Distribution for result")
-    plt.xticks(outcomes)
+    ax.set_xlabel("Outcome")
+    ax.set_ylabel("Probability (%)")
+    ax.set_title("Distribution for result")
+    ax.set_xticks(outcomes)
+    
+    # Confidence Interval Calculation and Display
+    if SHOW_CONFIDENCE_INTERVALS:
+        sorted_outcomes = sorted(result.dist.keys())
+        cum_prob = 0
+        lower_bound = None
+        upper_bound = None
+        lower_target = (1 - CONFIDENCE_LEVEL) / 2
+        upper_target = 1 - lower_target
+        
+        for outcome in sorted_outcomes:
+            cum_prob += result.dist[outcome]
+            if lower_bound is None and cum_prob >= lower_target:
+                lower_bound = outcome
+            if cum_prob >= upper_target:
+                upper_bound = outcome
+                break
+
+        ax.axvline(x=lower_bound, color='red', linestyle='--', 
+                   label=f'Lower {CONFIDENCE_LEVEL*100:.0f}% bound')
+        ax.axvline(x=upper_bound, color='green', linestyle='--', 
+                   label=f'Upper {CONFIDENCE_LEVEL*100:.0f}% bound')
+        ax.legend()
+        print(f"{CONFIDENCE_LEVEL*100:.0f}% confidence interval: [{lower_bound}, {upper_bound}]")
+    
+    # ----- Summary Statistics (printed to terminal) -----
+    mean_val = sum(x * p for x, p in result.dist.items())
+    variance_val = sum(p * (x - mean_val)**2 for x, p in result.dist.items())
+    std_val = math.sqrt(variance_val)
+    sorted_outcomes = sorted(result.dist.keys())
+    cum_prob = 0
+    median_val = None
+    for x in sorted_outcomes:
+        cum_prob += result.dist[x]
+        if cum_prob >= 0.5:
+            median_val = x
+            break
+    min_val = sorted_outcomes[0]
+    max_val = sorted_outcomes[-1]
+    
+    summary_data = [
+        ["Median", f"{median_val:.{DECIMAL_POINTS}f}"],
+        ["Mean", f"{mean_val:.{DECIMAL_POINTS}f}"],
+        ["Std Dev", f"{std_val:.{DECIMAL_POINTS}f}"],
+        ["Minimum", f"{min_val:.{DECIMAL_POINTS}f}"],
+        ["Maximum", f"{max_val:.{DECIMAL_POINTS}f}"],
+    ]
+    
+    print("Summary Statistics:")
+    for stat, value in summary_data:
+        print(f"{stat}: {value}")
+    
+    # Show the plot (without adding a table)
     plt.show()
 
 if __name__ == "__main__":
