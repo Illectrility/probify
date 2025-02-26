@@ -8,7 +8,7 @@ I like knowing the exact probability of different dice sequences for balancing p
 You could simulate a million rolls and estimate probabilities, but this is **slow and inaccurate**. This program **computes the exact probabilities** using math, not brute force. No randomness involved.
 
 # web version
-If you don't want to run the code yourself, you can use this very barebones web version I made:
+If you don't want to run the code yourself, you can use this web version:
 https://illectrility.github.io/probify-web/
 
 # installation
@@ -25,9 +25,11 @@ https://illectrility.github.io/probify-web/
 - Supports all common dice (d4, d6, d8, d10, d12, d20, etc.)  
 - Supports **conditional rerolling** (e.g., "reroll if less than 3")  
 - Supports **loops** (e.g., "roll 1d6 five times and sum the results")  
-- Displays a **bar chart** of all possible results and their probabilities  
+- Displays a **bar chart** of all possible results and their probabilities
+- Displays a **summary table** with relevant statistics such as mean, weighted median, standard deviation
 - Configurable **decimal places** for probability percentages  
-- Can **hide low-probability labels** under a set threshold  
+- Can **hide low-probability labels** under a set threshold
+- Can **show confidence interval** with configurable percentage (default 90%)
 
 # syntax
 - Dice rolls use `XdY` notation (e.g., `1d6`, `2d8`)  
